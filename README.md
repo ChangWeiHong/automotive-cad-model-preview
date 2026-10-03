@@ -22,7 +22,7 @@ local viewer, e.g. `http://127.0.0.1:3256/?file=STEP%2Fmyvi_v2.step`.
 
 ```bash
 scripts/add-step.sh ~/Downloads/new-part.step new_part   # 1. copy into models/STEP + add URL row
-scripts/deploy.sh                                        # 2. redeploy the viewer (~5-10 min)
+scripts/deploy.sh                                        # 2. build cache locally + redeploy (~5 min)
 git add -A && git commit -m "Add new_part" && git push   # 3. save it
 ```
 
@@ -31,15 +31,19 @@ Then open `https://awantech-cad-viewer.fly.dev/?file=STEP%2Fnew_part.step`.
 - The name becomes the URL: letters, digits, `.`, `_`, `-`.
 - STEP files are stored with **Git LFS** (`.gitattributes`). GitHub rejects
   normal files over 100 MB.
-- Every STEP is compiled during the Fly image build, so viewers never wait.
-  Big files make the deploy slower, not the page.
+- `scripts/deploy.sh` runs `scripts/build.sh` first. That builds the whole
+  viewer cache **on this machine**: STEP compile, surface data, and browser
+  meshes (each model is opened once in a headless browser). The Fly image only
+  copies that cache, so the server computes nothing.
 
 ## Deploy (local)
 
-One-time login:
+One-time setup:
 
 ```bash
 fly auth login          # Fly org: Willstack.ai (willstack-ai-293)
+uv venv -p 3.11 .venv && uv pip install -p .venv/bin/python "cadgen[snapshot]==0.7.6"
+.venv/bin/python -m playwright install chromium
 ```
 
 Deploy:
@@ -54,6 +58,17 @@ scripts/deploy.sh       # builds + deploys the viewer; prints every model URL
 scripts/teardown.sh     # destroys the Fly app (asks first)
 ```
 
+## Cache
+
+- The cache lives on the **server**, not in visitors' browsers, so every
+  visitor shares it.
+- It is stored on a Fly volume (`cad_cache`, mounted at `/data`). That keeps
+  it across restarts and redeploys.
+- Each deploy merges the freshly built cache into the volume without deleting
+  anything.
+- It never expires: `CADGEN_STORE_MAX=1000GB` stops cadgen from evicting
+  entries, and the machine never auto-stops.
+
 ## Run locally
 
 ```bash
@@ -66,7 +81,8 @@ scripts/dev.sh          # http://127.0.0.1:3256/?file=STEP%2Fmyvi_v2.step
 ```
 models/STEP/        STEP files served by the viewer (Git LFS)
 apps/viewer/        Dockerfile + fly.toml: `cadgen viewer` on Fly.io (app awantech-cad-viewer, region sin)
-scripts/            add-step.sh, deploy.sh, teardown.sh, dev.sh
+scripts/            add-step.sh, build.sh (+ warm.py), deploy.sh, teardown.sh, dev.sh
+build/              locally built viewer cache (git-ignored, shipped in the image)
 cad/myvi/           Perodua Myvi model sources (build123d/cadgen)
 ```
 
@@ -74,7 +90,7 @@ cad/myvi/           Perodua Myvi model sources (build123d/cadgen)
 
 - **Not authenticated.** The viewer is open to anyone with the URL. That is
   fine for a short demo; tear it down afterwards.
-- Viewer machine: 2 GB shared CPU, one machine kept warm
-  (`min_machines_running = 1`).
+- Viewer machine: 4 dedicated CPUs, 8 GB RAM, always on
+  (`auto_stop_machines = "off"`). Cache: 10 GB Fly volume.
 - Rebuild the Myvi STEP from source: `python cad/myvi/src/myvi_v2.py`. Needs
   `cad/myvi/requirements.txt`. The source FBX is not committed (licence).

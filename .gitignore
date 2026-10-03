@@ -9,3 +9,6 @@ cad/myvi/GLB/
 
 # Third-party source mesh: keep local, licence may not allow redistribution
 cad/myvi/source/
+
+# Locally pre-built viewer cache (scripts/build.sh), shipped in the image
+build/

@@ -1,2 +1,4 @@
 *
 !models/
+!build/cadgen-cache/
+!apps/viewer/start.sh
