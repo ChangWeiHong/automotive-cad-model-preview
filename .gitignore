@@ -1,0 +1,11 @@
+node_modules/
+.venv/
+.DS_Store
+__pycache__/
+tmp/
+
+# Myvi build output (GLB) is not needed by the viewer
+cad/myvi/GLB/
+
+# Third-party source mesh: keep local, licence may not allow redistribution
+cad/myvi/source/

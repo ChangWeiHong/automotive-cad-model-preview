@@ -1,0 +1,19 @@
+# Fly.io app running the CAD Viewer. Deploy from the repo root:
+#   fly deploy . --config apps/viewer/fly.toml --remote-only
+app = "awantech-cad-viewer"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1   # keep one warm during the demo
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2
