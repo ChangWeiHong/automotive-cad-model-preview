@@ -98,3 +98,24 @@ cad/myvi/           Perodua Myvi model sources (build123d/cadgen)
   (`auto_stop_machines = "off"`). Cache: 10 GB Fly volume.
 - Rebuild the Myvi STEP from source: `python cad/myvi/src/myvi_v2.py`. Needs
   `cad/myvi/requirements.txt`. The source FBX is not committed (licence).
+
+## Paint bench (`paint-bench/`)
+
+A standalone three.js page that lights the car models with a modelled sun and
+sky and shows two conditions side by side (region, timezone, date, time,
+weather, temperature, humidity, haze, altitude, ozone, street light). The paint
+is layered like factory paint: base coat that shifts colour with viewing
+angle, metallic/mica flakes, and an orange-peel clearcoat. Types: solid,
+metallic, pearl, candy, satin.
+
+```bash
+cd paint-bench && python3 -m http.server 8080   # then open http://127.0.0.1:8080
+```
+
+It needs a local server (browsers block `file://` model loads). Models in
+`paint-bench/models/` are GLB (metres, Y up, length along X). `sedan.glb` and
+`cybertruck.glb` were exported from `models/STEP/` with
+`cadgen glb build models/STEP/<name>.step`. The others were copied from the
+awantech `GLB/`, `compact-hatchback/GLB/` and `text-to-cad.ready/models/*/GLB/`
+folders. The page repaints the largest opaque non-trim material of each model.
+`paint-bench/` is not in the Fly image (`.dockerignore`).

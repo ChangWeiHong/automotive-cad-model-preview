@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daylight Paint Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Semi+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: lighting-lab bench. Shared paint rail on top, two condition bays side by side, spectrum plot + model notes below. Deliberately single dark theme (viewing booth). */
+:root{
+  --bg:#111317;
+  --surface:#181b21;
+  --raised:#20242c;
+  --line:#2b3039;
+  --ink:#e6e8ec;
+  --muted:#8d94a1;
+  --a:#5cc8c2;
+  --b:#f2836b;
+  --focus:#f4d06f;
+  --f-display:"Saira Semi Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Saira Semi Condensed",system-ui,-apple-system,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1440px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,3.4vw,38px);letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+h1 span{color:var(--muted);font-weight:400}
+.lede{margin:6px 0 0;color:var(--muted);max-width:62ch}
+h2{font-family:var(--f-display);font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0}
+button,select,input{font:inherit;color:inherit}
+button{background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500}
+button:hover{border-color:var(--muted)}
+button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tools label{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:14px}
+select{background:var(--raised);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%}
+
+/* paint rail */
+.rail{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.load{font-family:var(--f-mono);font-size:12px;color:var(--muted);min-width:0}
+.rail-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;flex-direction:column;align-items:stretch;gap:5px;width:86px;padding:0;background:none;border:none;text-align:left}
+.chip i{display:block;height:34px;border-radius:5px;border:1px solid rgba(255,255,255,.12);box-shadow:inset 0 10px 14px -8px rgba(255,255,255,.35),inset 0 -8px 12px -6px rgba(0,0,0,.45)}
+.chip span{font-size:12px;color:var(--muted);line-height:1.15}
+.chip em{font-style:normal;font-size:11px;opacity:.75}
+.chip[aria-pressed="true"]{background:none;color:inherit}
+.chip[aria-pressed="true"] i{outline:2px solid var(--ink);outline-offset:2px}
+.chip[aria-pressed="true"] span{color:var(--ink)}
+.custom{display:flex;flex-direction:column;gap:5px;width:86px}
+.custom input{width:100%;height:34px;border:1px solid var(--line);border-radius:5px;background:var(--raised);padding:2px;cursor:pointer}
+.custom span{font-size:12px;color:var(--muted)}
+
+/* bays */
+.bays{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:20px}
+.bay{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.bay-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tag{font-family:var(--f-display);font-weight:700;font-size:15px;width:26px;height:26px;border-radius:5px;display:grid;place-items:center;color:var(--bg)}
+.bay[data-k="a"] .tag{background:var(--a)} .bay[data-k="b"] .tag{background:var(--b)}
+.summary{font-weight:500;min-width:0;flex:1}
+.view{position:relative;aspect-ratio:16/10;max-width:100%;background:#000;touch-action:none}
+.view canvas{display:block;width:100%!important;height:100%!important}
+.hint{position:absolute;right:10px;bottom:8px;font-size:11px;color:rgba(255,255,255,.55);font-family:var(--f-mono);pointer-events:none}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--line)}
+.stat{padding:8px 12px;border-right:1px solid var(--line);border-top:1px solid var(--line);min-width:0}
+.stat:nth-child(4n){border-right:none}
+.stat:nth-child(-n+4){border-top:none}
+.stat dt{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stat dd{margin:0;font-family:var(--f-mono);font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctls{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 18px;padding:14px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;min-width:0}
+.ctl label{font-size:13px;color:var(--muted)}
+.ctl output{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.ctl select,.ctl input{grid-column:1/-1;width:100%}
+input[type=range]{accent-color:var(--ink);height:20px}
+.bay[data-k="a"] input[type=range]{accent-color:var(--a)}
+.bay[data-k="b"] input[type=range]{accent-color:var(--b)}
+
+/* comparison */
+.compare{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:20px}
+@media (max-width:900px){.compare{grid-template-columns:1fr}}
+.plot{position:relative;min-width:0}
+.plot canvas{display:block;width:100%;height:300px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}
+.legend b{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:6px;border-radius:2px}
+.seen{display:flex;flex-direction:column;gap:12px;min-width:0}
+.seen-row{display:grid;grid-template-columns:26px 1fr 1fr;gap:10px;align-items:stretch}
+.sw{border-radius:6px;min-height:64px;border:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-end;padding:6px 8px;font-family:var(--f-mono);font-size:12px}
+.sw span{background:rgba(0,0,0,.55);color:#fff;padding:1px 5px;border-radius:3px}
+.cap{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.delta{font-family:var(--f-mono);font-size:28px;font-variant-numeric:tabular-nums;line-height:1}
+.delta small{font-size:13px;color:var(--muted);font-family:var(--f-body);margin-left:6px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px 24px;padding-top:4px}
+.notes div{min-width:0}
+.notes h3{font-family:var(--f-display);font-size:15px;margin:0 0 3px;font-weight:600}
+.notes p{margin:0;color:var(--muted);font-size:14px;max-width:60ch}
+.foot{color:var(--muted);font-size:13px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat:nth-child(n){border-right:1px solid var(--line);border-top:1px solid var(--line)}.stat:nth-child(2n){border-right:none}.stat:nth-child(-n+2){border-top:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Daylight Paint Bench <span>/ A vs B</span></h1>
+      <p class="lede">Pick a paint, then set two places, dates, times and skies. Each bay lights the same car with its own sun, sky and street light, so you can see how the light changes the colour you perceive.</p>
+    </div>
+    <div class="tools">
+      <button id="play" aria-pressed="false">Run the clock</button>
+      <button id="copyAB">Copy A → B</button>
+      <button id="copyBA">Copy B → A</button>
+      <label><input type="checkbox" id="sync" checked> Link cameras</label>
+      <label>Exposure
+        <select id="expo"><option value="adapt">Eye-adapted</option><option value="fixed">Fixed (noon)</option></select>
+      </label>
+    </div>
+  </header>
+
+  <section class="rail" aria-label="Paint">
+    <div class="rail-top">
+      <h2>Model &amp; paint</h2>
+      <div class="tools">
+      <label>Model
+        <select id="model"></select>
+      </label>
+      <span class="load" id="loadState" role="status"></span>
+      <label>Finish
+        <select id="finish"><option value="solid" selected>Solid</option><option value="metallic">Metallic</option><option value="pearl">Pearl (tri-coat)</option><option value="candy">Candy</option><option value="matte">Satin</option></select>
+      </label>
+      </div>
+    </div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <section class="bays">
+    <article class="bay" data-k="a" id="bay-a"></article>
+    <article class="bay" data-k="b" id="bay-b"></article>
+  </section>
+
+  <section class="compare" aria-label="Spectrum comparison">
+    <div class="plot">
+      <h2>Light reaching the car</h2>
+      <canvas id="chart" aria-label="Spectral power distribution for A and B"></canvas>
+      <div class="legend">
+        <span><b style="background:var(--a)"></b>A</span>
+        <span><b style="background:var(--b)"></b>B</span>
+        <span>Each curve scaled to its own peak, so you compare shape (colour), not brightness.</span>
+      </div>
+    </div>
+    <div class="seen">
+      <h2>Paint as seen</h2>
+      <div class="seen-row"><span class="tag" style="background:var(--a);color:var(--bg);font-family:var(--f-display);font-weight:700;display:grid;place-items:center;border-radius:5px">A</span>
+        <div><div class="cap">Light</div><div class="sw" id="lightA"><span></span></div></div>
+        <div><div class="cap">Paint</div><div class="sw" id="paintA"><span></span></div></div></div>
+      <div class="seen-row"><span class="tag" style="background:var(--b);color:var(--bg);font-family:var(--f-display);font-weight:700;display:grid;place-items:center;border-radius:5px">B</span>
+        <div><div class="cap">Light</div><div class="sw" id="lightB"><span></span></div></div>
+        <div><div class="cap">Paint</div><div class="sw" id="paintB"><span></span></div></div></div>
+      <div>
+        <div class="cap">Colour shift A ↔ B</div>
+        <div class="delta" id="delta">0.0<small>ΔE (CIE76)</small></div>
+        <p class="foot" id="deltaNote" style="margin:6px 0 0"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="notes" aria-label="What changes the colour of light">
+    <div><h3>Sun angle</h3><p>Latitude, date, clock time and timezone set the sun's height. A low sun crosses up to 38× more air, so blue scatters out and direct light turns gold, then red.</p></div>
+    <div><h3>Air molecules</h3><p>Rayleigh scattering grows as 1/λ⁴: blue sky, warmer sun. High altitude (Denver, La Paz) means less air, a whiter sun and a deeper blue sky.</p></div>
+    <div><h3>Aerosols and humidity</h3><p>Dust, smog, smoke and sea salt scatter all colours more evenly, so skies go milky and shadows soften. Humid air swells these particles and adds haze.</p></div>
+    <div><h3>Temperature</h3><p>Warm air holds more water vapour. That adds haze and absorption bands near 690 and 720 nm. Hot clear days also add near-ground heat haze.</p></div>
+    <div><h3>Ozone and clouds</h3><p>Ozone absorbs orange-yellow near 600 nm, which keeps twilight blue. Clouds flatten the spectrum into cool, even light with no hard shadows.</p></div>
+    <div><h3>Street light</h3><p>Sodium lamps emit a narrow band near 589 nm, so reds, blues and greens collapse toward brown-grey. LED lamps keep most of the paint's hue.</p></div>
+  </section>
+  <p class="foot">Simplified single-scattering atmosphere at 10 nm steps (Rayleigh, Ångström aerosol, Chappuis ozone, H₂O and O₂ bands, cloud diffusion), converted with CIE 1931 colour matching. Built for side-by-side comparison, not calibrated colour grading. Clock times are standard time (no daylight saving).</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(() => {
+const rad = Math.PI / 180;
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const gauss = (x, m, s) => Math.exp(-0.5 * ((x - m) / s) ** 2);
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+/* ---------- data ---------- */
+const REGIONS = {
+  kl:  {name:'Kuala Lumpur', lat:3.14,  lon:101.69,  tz:8,   alt:60,   aod:.35, temp:32, hum:70, o3:260},
+  sg:  {name:'Singapore',    lat:1.35,  lon:103.82,  tz:8,   alt:15,   aod:.30, temp:31, hum:78, o3:260},
+  dxb: {name:'Dubai',        lat:25.20, lon:55.27,   tz:4,   alt:5,    aod:.55, temp:38, hum:45, o3:280},
+  del: {name:'New Delhi',    lat:28.61, lon:77.21,   tz:5.5, alt:216,  aod:.80, temp:30, hum:55, o3:270},
+  tyo: {name:'Tokyo',        lat:35.68, lon:139.69,  tz:9,   alt:40,   aod:.20, temp:22, hum:65, o3:300},
+  lon: {name:'London',       lat:51.51, lon:-0.13,   tz:0,   alt:20,   aod:.15, temp:14, hum:75, o3:320},
+  rey: {name:'Reykjavík',    lat:64.15, lon:-21.94,  tz:0,   alt:30,   aod:.05, temp:6,  hum:75, o3:330},
+  den: {name:'Denver',       lat:39.74, lon:-104.99, tz:-7,  alt:1609, aod:.07, temp:18, hum:35, o3:300},
+  lax: {name:'Los Angeles',  lat:34.05, lon:-118.24, tz:-8,  alt:90,   aod:.20, temp:24, hum:55, o3:300},
+  lpz: {name:'La Paz',       lat:-16.50,lon:-68.15,  tz:-4,  alt:3640, aod:.04, temp:12, hum:45, o3:250},
+  syd: {name:'Sydney',       lat:-33.87,lon:151.21,  tz:10,  alt:20,   aod:.08, temp:20, hum:65, o3:290},
+};
+const WEATHER = {
+  clear:    {n:'Clear',          c:0,   kc:0,   aod:0},
+  partly:   {n:'Partly cloudy',  c:.35, kc:.9,  aod:0},
+  overcast: {n:'Overcast',       c:1,   kc:.3,  aod:.1},
+  rain:     {n:'Rain',           c:1,   kc:.16, aod:.2, wet:true},
+  fog:      {n:'Fog',            c:.6,  kc:.45, aod:2.2, fog:.03},
+  dust:     {n:'Dust / sand haze', c:0, kc:0,   aod:1.2, ang:.25, dust:true},
+};
+const PAINTS = [
+  ['Racing Red','#b3121b','solid'],['Crystal Red','#a50d18','candy'],['Arctic White','#ecede9','solid'],['Pearl White','#f0eee6','pearl'],
+  ['Obsidian Black','#1c1d20','metallic'],['Lunar Silver','#c3c6ca','metallic'],['Cement Grey','#75787b','solid'],['Midnight Blue','#24397a','metallic'],
+  ['Lagoon Teal','#1f7a82','pearl'],['Forest Green','#24503a','metallic'],['Sunburst Yellow','#e5b10a','solid'],['Copper Orange','#c8622a','metallic'],
+  ['Plum Violet','#5e2559','pearl'],['Sand Beige','#c9b38e','metallic'],['Satin Graphite','#4a4d52','matte'],
+];
+
+/* ---------- spectral core (380–780 nm, 10 nm) ---------- */
+const WL = []; for (let l = 380; l <= 780; l += 10) WL.push(l);
+const N = WL.length;
+const g2 = (x, m, s1, s2) => { const t = (x - m) / (x < m ? s1 : s2); return Math.exp(-0.5 * t * t); };
+const cmfAt = l => [
+  1.056*g2(l,599.8,37.9,31.0) + 0.362*g2(l,442.0,16.0,26.7) - 0.065*g2(l,501.1,20.4,26.2),
+  0.821*g2(l,568.8,46.9,40.5) + 0.286*g2(l,530.9,16.3,31.1),
+  1.217*g2(l,437.0,11.8,36.0) + 0.681*g2(l,459.0,26.0,13.8)];
+const CMF = WL.map(cmfAt);
+const planck = (l, T) => { const m = l * 1e-9; return 1 / (m ** 5 * (Math.exp(1.4388e-2 / (m * T)) - 1)); };
+const E0 = WL.map(l => planck(l, 5778) / planck(550, 5778));
+const ZERO = WL.map(() => 0);
+const xyzOf = a => { let X=0,Y=0,Z=0; for (let i=0;i<N;i++){X+=a[i]*CMF[i][0];Y+=a[i]*CMF[i][1];Z+=a[i]*CMF[i][2];} return [X,Y,Z]; };
+const lumY = a => xyzOf(a)[1];
+const xyz2rgb = ([X,Y,Z]) => [3.2406*X-1.5372*Y-0.4986*Z, -0.9689*X+1.8758*Y+0.0415*Z, 0.0557*X-0.2040*Y+1.0570*Z];
+const scale = (a, k) => a.map(v => v * k);
+const add = (...as) => WL.map((_, i) => as.reduce((s, a) => s + a[i], 0));
+const shapeY = (a, Y) => { const y = lumY(a); return y > 0 ? scale(a, Y / y) : a; };
+function lightColor(a){ // linear sRGB, luminance = 1
+  const xyz = xyzOf(a); if (!(xyz[1] > 1e-30)) return [1,1,1];
+  const rgb = xyz2rgb(xyz.map(v => v / xyz[1])).map(v => Math.max(v, 0));
+  const L = 0.2126*rgb[0] + 0.7152*rgb[1] + 0.0722*rgb[2];
+  return rgb.map(v => v / L);
+}
+function cct(a){ const [X,Y,Z] = xyzOf(a); const s = X+Y+Z; if (s <= 0) return 0;
+  const x = X/s, y = Y/s, n = (x-0.3320)/(0.1858-y); return 449*n**3 + 3525*n**2 + 6823.3*n + 5520.33; }
+
+const lines = (arr, base=0) => WL.map(l => base + arr.reduce((s,[m,w,a]) => s + a*gauss(l,m,w), 0));
+const STREET = {
+  none:  {n:'None', lux:0},
+  hps:   {n:'Sodium (HPS)', lux:15, spec: lines([[589,14,1],[569,7,.45],[616,10,.42],[498,5,.12],[467,4,.07],[545,8,.12]], .015)},
+  led40: {n:'LED 4000 K', lux:20, spec: lines([[450,10,.55],[585,62,1]])},
+  led27: {n:'LED 2700 K', lux:20, spec: lines([[450,10,.22],[610,62,1]])},
+};
+const HEAD = {
+  off:     {n:'Off'},
+  halogen: {n:'Halogen', spec: WL.map(l => planck(l,3200))},
+  xenon:   {n:'Xenon HID', spec: add(scale(WL.map(l=>planck(l,4300)), 1/planck(560,4300)*.6), lines([[470,6,.35],[535,6,.3],[590,6,.35],[690,6,.2]]))},
+  led:     {n:'LED', spec: lines([[450,11,1],[560,55,1.1]])},
+};
+
+/* ---------- sun position (NOAA approximation) ---------- */
+function sunPos(lat, lon, tz, day, hour){
+  const gm = 2*Math.PI/365*(day-1+(hour-12)/24);
+  const eqt = 229.18*(0.000075+0.001868*Math.cos(gm)-0.032077*Math.sin(gm)-0.014615*Math.cos(2*gm)-0.040849*Math.sin(2*gm));
+  const decl = 0.006918-0.399912*Math.cos(gm)+0.070257*Math.sin(gm)-0.006758*Math.cos(2*gm)+0.000907*Math.sin(2*gm)-0.002697*Math.cos(3*gm)+0.00148*Math.sin(3*gm);
+  const tst = hour*60 + eqt + 4*lon - 60*tz;
+  const ha = (tst/4 - 180)*rad, phi = lat*rad;
+  let el = Math.asin(clamp(Math.sin(phi)*Math.sin(decl)+Math.cos(phi)*Math.cos(decl)*Math.cos(ha), -1, 1)) / rad;
+  if (el > -1.5) el += 1.02 / Math.tan((el + 10.3/(el + 5.11))*rad) / 60; // refraction
+  const az = (Math.atan2(Math.sin(ha), Math.cos(ha)*Math.sin(phi) - Math.tan(decl)*Math.cos(phi)) / rad + 540) % 360;
+  return {el, az, solar: ((tst/60) % 24 + 24) % 24};
+}
+
+/* ---------- atmosphere ---------- */
+function scatterAt(c, el){
+  const W = WEATHER[c.weather];
+  const P = Math.exp(-c.alt/8434), RH = c.hum/100, T = c.temp;
+  const es = 6.112*Math.exp(17.67*T/(T+243.5));
+  const AH = 216.7*RH*es/(273.15+T);                 // g/m³
+  const w = AH*0.17*Math.exp(-c.alt/2200);           // precipitable water, cm
+  const fRH = Math.pow(1 - Math.min(RH, .95), -.25); // hygroscopic growth
+  const heat = (W.c < .5 && T > 30) ? (T-30)*.006 : 0;
+  const aod = c.aod*fRH + heat + W.aod;
+  const ang = W.ang ?? 1.3;
+  const elc = Math.max(el, 0);
+  const m = 1/(Math.sin(elc*rad) + 0.50572*Math.pow(elc + 6.07995, -1.6364));
+  const cz = Math.sin(elc*rad), k = 22/6370;
+  const mo3 = (1+k)/Math.sqrt(cz*cz + 2*k);
+  const sinE = cz + .06*Math.exp(-elc/4);
+  const Dn = [], SR = [], SA = [];
+  WL.forEach((l, i) => {
+    const lu = l/1000;
+    const tR = P*0.008569*lu**-4*(1 + 0.0113*lu**-2 + 0.00013*lu**-4);
+    const tA = aod*Math.pow(lu/.55, -ang);
+    const tO = (c.o3/300)*(.032*gauss(l,602,52) + .006*gauss(l,540,30));
+    const tW = w*(.012*gauss(l,720,9) + .004*gauss(l,690,8) + .003*gauss(l,650,7));
+    const tO2 = P*(.25*gauss(l,760,4) + .03*gauss(l,690,3));
+    const absorb = W.dust ? Math.min(.8, .35*(.55/lu)**2) : 0;
+    Dn[i] = E0[i]*Math.exp(-m*(tR+tA+tW+tO2) - mo3*tO);
+    const ext = Math.exp(-.25*m*(tR+tA) - mo3*tO - .5*m*(tW+tO2));
+    SR[i] = E0[i]*sinE*.5*(1-Math.exp(-m*tR))*ext;
+    SA[i] = E0[i]*sinE*.4*(1-Math.exp(-m*tA))*(1-absorb)*ext;
+  });
+  return {Dn, SR, SA, m: el > 0 ? m : Infinity, aod, w};
+}
+const YREF = (() => { const s = scatterAt({alt:0,hum:50,temp:20,aod:.1,o3:300,weather:'clear'}, 90); return lumY(add(s.Dn, s.SR, s.SA)); })();
+const NIGHT = shapeY(WL.map((l,i) => E0[i]*(l/550)**-1), YREF*2e-7);
+
+function solve(c){
+  const R = REGIONS[c.region], W = WEATHER[c.weather];
+  const sp = sunPos(R.lat, R.lon, c.tz, c.day, c.time);
+  const el = sp.el;
+  const s = scatterAt(c, el);
+  const cz = Math.max(Math.sin(el*rad), 0);
+  let Dn = scale(s.Dn, smooth(-.8, .4, el)), SR = s.SR, SA = s.SA;
+  if (el < 0){ // twilight: sky lit from above, filtered by ozone
+    const f = Math.exp(el/1.15), b = clamp(-el/4, 0, 1);
+    const tw = shapeY(WL.map((l,i) => E0[i]*(l/550)**-4*Math.exp(-18*(c.o3/300)*.032*gauss(l,602,52))), lumY(add(SR,SA)));
+    SR = WL.map((_,i) => ((1-b)*SR[i] + b*tw[i]*.75)*f);
+    SA = WL.map((_,i) => ((1-b)*SA[i] + b*tw[i]*.25)*f);
+  }
+  SR = add(SR, NIGHT);
+  const clearGlobal = add(scale(Dn, cz), SR, SA);
+  const cloud = scale(WL.map((l,i) => clearGlobal[i]*(l/550)**-.3), W.c*W.kc);
+  Dn = scale(Dn, 1-W.c); SR = scale(SR, 1-W.c); SA = scale(SA, 1-W.c);
+  const diffuse = add(SR, SA, cloud);
+  const St = STREET[c.street];
+  const street = St.lux ? shapeY(St.spec, YREF*St.lux/110000) : ZERO;
+  const total = add(scale(Dn, cz), diffuse, street);
+
+  const k3 = 3/YREF;
+  const Lavg = k3*lumY(diffuse);
+  const zen = lightColor(add(scale(SR,1.2), scale(SA,.3), cloud)).map(v => v*Lavg*(.8+.6*W.c));
+  const horL = Lavg*(1.25-.6*W.c);
+  const hor = lightColor(add(scale(SR,.6), scale(SA,1.5), cloud, scale(Dn,.02))).map(v => v*horL);
+  const rel = lumY(total)/YREF;
+  const gnd = lightColor(total).map(v => v*.1*3*rel);
+  const glowSpec = el >= 0 ? s.Dn : scatterAt(c, 0).Dn;
+  const glowI = el < -8 ? 0 : horL*(el < 0 ? 1.5*Math.exp(el/2) : .8)*(1-.85*W.c);
+  const sunI = k3*lumY(Dn);
+  const sunCol = lightColor(Dn);
+  return {
+    sp, el, s, W, Dn, diffuse, street, total, rel, lux: rel*110000, cct: cct(total),
+    sunI, sunCol, skyCol: lightColor(diffuse), zen, hor, gnd,
+    glow: lightColor(glowSpec).map(v => v*glowI),
+    disc: el > -.5 ? sunCol.map(v => v*(sunI*8 + 1.5*horL)*(1-W.c)) : [0,0,0],
+    streetCol: lightColor(St.lux ? St.spec : E0), streetI: k3*lumY(street),
+    totalCol: lightColor(total),
+  };
+}
+
+/* ---------- colour utils ---------- */
+const s2l = v => v <= .04045 ? v/12.92 : ((v+.055)/1.055)**2.4;
+const l2s = v => v <= .0031308 ? 12.92*v : 1.055*v**(1/2.4) - .055;
+const hexToLin = h => [1,3,5].map(i => s2l(parseInt(h.substr(i,2),16)/255));
+const linToHex = rgb => '#' + rgb.map(v => Math.round(clamp(l2s(clamp(v,0,1)),0,1)*255).toString(16).padStart(2,'0')).join('');
+function lab(rgb){
+  const [r,g,b] = rgb.map(v => clamp(v,0,1));
+  const X = (.4124*r+.3576*g+.1805*b)/.95047, Y = .2126*r+.7152*g+.0722*b, Z = (.0193*r+.1192*g+.9505*b)/1.08883;
+  const f = t => t > 216/24389 ? Math.cbrt(t) : (24389/27*t+16)/116;
+  return [116*f(Y)-16, 500*(f(X)-f(Y)), 200*(f(Y)-f(Z))];
+}
+
+/* ---------- three.js scene ---------- */
+const SKY_FRAG = `
+uniform vec3 zen,hor,gnd,glow,disc,sunDir; uniform float exposure, display, haze;
+float hash(float n){ return fract(sin(n*12.9898)*43758.5453); }
+varying vec3 vDir;
+vec3 rrt(vec3 v){ vec3 a=v*(v+0.0245786)-0.000090537; vec3 b=v*(0.983729*v+0.4329510)+0.238081; return a/b; }
+vec3 aces(vec3 c){
+  mat3 inM=mat3(vec3(0.59719,0.07600,0.02840),vec3(0.35458,0.90834,0.13383),vec3(0.04823,0.01566,0.83777));
+  mat3 outM=mat3(vec3(1.60475,-0.10208,-0.00327),vec3(-0.53108,1.10813,-0.07276),vec3(-0.07367,-0.00605,1.07602));
+  c*=exposure/0.6; c=outM*rrt(inM*c); return clamp(c,0.,1.);
+}
+void main(){
+  vec3 d=normalize(vDir); float h=d.y; vec3 c;
+  if(h>=0.) c=mix(hor,zen,pow(clamp(h,0.,1.),0.45)); else c=mix(hor,gnd,clamp(-h*12.,0.,1.));
+  // distant city skyline: gives the clearcoat something to reflect
+  float seg=floor((atan(d.z,d.x)+3.14159)*14.); float hb=hash(seg);
+  float H = hb<0.3 ? 0.006+0.012*hash(seg+7.) : 0.015+0.075*hb*hb;
+  float bld = step(0.,h)*step(h,H);
+  vec3 face = (gnd*1.9 + hor*0.06)*(0.55+0.45*hash(seg+3.));
+  c = mix(c, mix(face, hor, clamp(haze*0.85+0.12,0.,1.)), bld);
+  float s=max(dot(d,normalize(sunDir)),0.);
+  c+=glow*(pow(s,6.)*0.6+pow(s,48.)*1.2)*smoothstep(-0.06,0.02,h);
+  c+=disc*smoothstep(0.99990,0.99996,s)*step(0.,h)*(1.-bld);
+  if(display>0.5) c=aces(c);
+  gl_FragColor=linearToOutputTexel(vec4(c,1.));
+}`;
+const SKY_VERT = `varying vec3 vDir; void main(){ vec4 wp=modelMatrix*vec4(position,1.); vDir=wp.xyz-cameraPosition; gl_Position=projectionMatrix*viewMatrix*wp; }`;
+const skyMat = display => new THREE.ShaderMaterial({
+  side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: {zen:{value:new THREE.Vector3()}, hor:{value:new THREE.Vector3()}, gnd:{value:new THREE.Vector3()},
+    glow:{value:new THREE.Vector3()}, disc:{value:new THREE.Vector3()}, sunDir:{value:new THREE.Vector3(0,1,0)},
+    exposure:{value:1}, haze:{value:0}, display:{value:display ? 1 : 0}},
+  vertexShader: SKY_VERT, fragmentShader: SKY_FRAG,
+});
+const linColor = hex => new THREE.Color(hex).convertSRGBToLinear();
+
+/* ---------- automotive paint ----------
+   Layer stack, bottom to top: base coat (colour that shifts face → flop with viewing angle),
+   aluminium / mica flakes (tilted micro-mirrors = sparkle), clearcoat (IOR 1.5, with orange-peel waviness). */
+const gaussRand = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+const UV_TILE = 0.5; // metres of panel per texture tile
+function flakeTexture(){
+  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), img = g.createImageData(S, S), d = img.data;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++){
+    // most flakes lie flat in the film; a few are steeply tilted
+    const t = Math.min(1.2, Math.abs(gaussRand())*.2 + (Math.random() < .04 ? .35*Math.random() : 0)), ph = Math.random()*Math.PI*2;
+    const n = [Math.sin(t)*Math.cos(ph), Math.sin(t)*Math.sin(ph), Math.cos(t)].map(v => (v*.5+.5)*255);
+    const i = (y*S + x)*4; d[i]=n[0]; d[i+1]=n[1]; d[i+2]=n[2]; d[i+3]=255;
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8;
+  tex.repeat.set(1/UV_TILE, 1/UV_TILE); return tex;
+}
+function peelTexture(){
+  const S = 512, h = new Float32Array(S*S), waves = [];
+  for (let k = 0; k < 36; k++){ const f = 18 + Math.random()*40, a = Math.random()*Math.PI*2; waves.push([Math.round(f*Math.cos(a)), Math.round(f*Math.sin(a)), Math.random()*6.283, 1/f]); }
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++){ let v = 0; for (const [fx,fy,p,a] of waves) v += a*Math.sin(2*Math.PI*(fx*x+fy*y)/S + p); h[y*S+x] = v; }
+  const cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), img = g.createImageData(S, S), d = img.data;
+  let mx = 1e-9; const gx = new Float32Array(S*S), gy = new Float32Array(S*S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++){ const i = y*S+x;
+    gx[i] = h[y*S+(x+1)%S] - h[y*S+(x+S-1)%S]; gy[i] = h[((y+1)%S)*S+x] - h[((y+S-1)%S)*S+x]; mx = Math.max(mx, Math.abs(gx[i]), Math.abs(gy[i])); }
+  for (let i = 0; i < S*S; i++){ const nx = -gx[i]/mx, ny = -gy[i]/mx, l = Math.hypot(nx, ny, 1);
+    d[i*4] = (nx/l*.5+.5)*255; d[i*4+1] = (ny/l*.5+.5)*255; d[i*4+2] = (1/l*.5+.5)*255; d[i*4+3] = 255; }
+  g.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex;
+}
+const FLAKES = flakeTexture(), PEEL = peelTexture();
+const PAINT_U = {faceCol:{value:new THREE.Color(1,0,0)}, flopCol:{value:new THREE.Color(.5,0,0)}, flopExp:{value:1}};
+function makePaint(){
+  const m = new THREE.MeshPhysicalMaterial({color:0xffffff, roughness:.3, metalness:.5, clearcoat:1, clearcoatRoughness:.03,
+    normalMap:FLAKES, normalScale:new THREE.Vector2(.5,.5), clearcoatNormalMap:PEEL, clearcoatNormalScale:new THREE.Vector2(.1,.1)});
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, PAINT_U);
+    sh.fragmentShader = 'uniform vec3 faceCol, flopCol; uniform float flopExp;\n' + sh.fragmentShader.replace('#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+      { float ndv = clamp(dot(geometryNormal, normalize(vViewPosition)), 0., 1.);
+        diffuseColor.rgb = mix(flopCol, faceCol, pow(ndv, flopExp)); }`);
+  };
+  return m;
+}
+// finish recipes: base roughness/metalness is the flake layer, clearcoat sits on top
+const FIN = {
+  solid:    {n:'Solid',    metalness:0,   roughness:.42, clearcoat:1, clearcoatRoughness:.03, flake:0,   peel:.12, exp:.9},
+  metallic: {n:'Metallic', metalness:.6,  roughness:.3,  clearcoat:1, clearcoatRoughness:.03, flake:.55, peel:.12, exp:1.1},
+  pearl:    {n:'Pearl',    metalness:.3,  roughness:.34, clearcoat:1, clearcoatRoughness:.03, flake:.3,  peel:.12, exp:.9},
+  candy:    {n:'Candy',    metalness:.5,  roughness:.26, clearcoat:1, clearcoatRoughness:.02, flake:.4,  peel:.1,  exp:1.6},
+  matte:    {n:'Satin',    metalness:.35, roughness:.55, clearcoat:1, clearcoatRoughness:.5,  flake:.2,  peel:0,   exp:1},
+};
+function paintLook(hex, type){
+  const hsl = {}; new THREE.Color(hex).getHSL(hsl);
+  const face = new THREE.Color(hex), flop = new THREE.Color();
+  const {h, s, l} = hsl;
+  if (type === 'solid') flop.setHSL(h, s, l*.86);
+  else if (type === 'metallic'){ face.setHSL(h, s*.92, Math.min(.95, l*1.12)); flop.setHSL(h, Math.min(1, s*1.1), l*.32); }
+  else if (type === 'pearl'){ if (s < .15) flop.setHSL(.11, .3, l*.84); else flop.setHSL((h+.09)%1, Math.min(1, s*1.15+.05), l*.58); }
+  else if (type === 'candy'){ face.setHSL(h, Math.min(1, s*1.05), Math.min(.9, l*1.1)); flop.setHSL(h, Math.min(1, s*1.25), l*.22); }
+  else flop.setHSL(h, s, l*.92);
+  return {face: face.convertSRGBToLinear(), flop: flop.convertSRGBToLinear()};
+}
+
+/* body: lofted super-ellipse sections, so highlights and horizon reflections flow across curved panels */
+function loftBody(){
+  const prof = new THREE.SplineCurve([[-2.3,.93],[-2.0,1.02],[-1.0,1.04],[.9,1.0],[1.6,.94],[2.1,.86],[2.36,.78]].map(([z,y]) => new THREE.Vector2(z,y))).getPoints(240);
+  const topAt = z => { for (let i = 1; i < prof.length; i++) if (prof[i].x >= z){ const a = prof[i-1], b = prof[i], t = (z-a.x)/(b.x-a.x || 1); return a.y + (b.y-a.y)*t; } return prof[prof.length-1].y; };
+  const Z0 = -2.32, Z1 = 2.38, zc = (Z0+Z1)/2, L = (Z1-Z0)/2, bot = .25, n = 3.3, m = 5.5;
+  const NZ = 160, NT = 96, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= NZ; i++){
+    const z = zc + L*Math.sin((-1 + 2*i/NZ)*Math.PI/2);
+    const f = Math.pow(Math.max(0, 1 - Math.pow(Math.abs((z-zc)/L), m)), 1/m);
+    const top = topAt(z), b = (top-bot)/2*f, yc = bot + (top-bot)/2 + (top-bot)/2*(1-f)*.35, a = .95*f;
+    for (let j = 0; j < NT; j++){
+      const th = -Math.PI/2 + j/NT*Math.PI*2, c = Math.cos(th), s = Math.sin(th);
+      pos.push(a*Math.sign(c)*Math.abs(c)**(2/n), yc + b*Math.sign(s)*Math.abs(s)**(2/n), z);
+      uv.push(z, (j/NT)*3.4);
+    }
+  }
+  for (let i = 0; i < NZ; i++) for (let j = 0; j < NT; j++){
+    const A = i*NT+j, B = i*NT+(j+1)%NT, C = (i+1)*NT+j, D = (i+1)*NT+(j+1)%NT;
+    idx.push(A,B,C, B,D,C);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  return geo;
+}
+
+function buildCar(paint){
+  const car = new THREE.Group();
+  const glass = new THREE.MeshPhysicalMaterial({color:0x07090c, roughness:.04, metalness:0, clearcoat:1, clearcoatRoughness:.02});
+  const trim = new THREE.MeshPhysicalMaterial({color:linColor('#111214'), roughness:.35, clearcoat:.6, clearcoatRoughness:.1});
+  const well = new THREE.MeshStandardMaterial({color:linColor('#0b0b0c'), roughness:.95});
+  const tyre = new THREE.MeshStandardMaterial({color:linColor('#151515'), roughness:.92});
+  const rim = new THREE.MeshStandardMaterial({color:0xbfc3c8, metalness:1, roughness:.28});
+  const chrome = new THREE.MeshStandardMaterial({color:0xffffff, metalness:1, roughness:.08});
+  const plate = new THREE.MeshStandardMaterial({color:linColor('#e9e7df'), roughness:.6});
+  const body = new THREE.Mesh(loftBody(), paint); body.castShadow = body.receiveShadow = true; car.add(body);
+  car.updateMatrixWorld(true);
+  const cab = new THREE.Shape();
+  cab.moveTo(1.05,.9); cab.lineTo(.2,1.36); cab.quadraticCurveTo(-.25,1.45,-.8,1.42); cab.lineTo(-1.5,1.3); cab.lineTo(-1.98,.9); cab.lineTo(1.05,.9);
+  const cg = new THREE.ExtrudeGeometry(cab, {depth:1.12, bevelEnabled:true, bevelThickness:.13, bevelSize:.1, bevelSegments:6, curveSegments:18});
+  cg.rotateY(-Math.PI/2); cg.translate(.56, 0, 0);
+  const cabin = new THREE.Mesh(cg, glass); cabin.castShadow = true; car.add(cabin);
+
+  // place trim on the curved nose by casting rays at the body
+  const ray = new THREE.Raycaster();
+  const stick = (geo, mat, x, y, off) => {
+    ray.set(new THREE.Vector3(x, y, 6), new THREE.Vector3(0, 0, -1));
+    const hit = ray.intersectObject(body)[0];
+    const m = new THREE.Mesh(geo, mat); m.castShadow = true;
+    if (hit){ const nr = hit.face.normal.clone(); m.position.copy(hit.point).addScaledVector(nr, off); m.lookAt(hit.point.clone().add(nr)); }
+    car.add(m); return m;
+  };
+  const B = (w,h,d) => new THREE.BoxGeometry(w,h,d);
+  stick(B(.86,.15,.06), trim, 0, .5, 0);
+  stick(B(1.15,.08,.06), trim, 0, .34, 0);
+  stick(B(.5,.11,.02), plate, 0, .42, .02);
+  const lens = new THREE.MeshPhysicalMaterial({color:0x1a1c20, roughness:.05, metalness:.2, clearcoat:1, emissive:0xffffff, emissiveIntensity:0});
+  const drl = new THREE.MeshStandardMaterial({color:0x222222, emissive:0xffffff, emissiveIntensity:0});
+  const spots = [];
+  [-1,1].forEach(sd => {
+    stick(B(.46,.13,.06), chrome, sd*.55, .66, 0);
+    stick(B(.42,.1,.05), lens, sd*.55, .665, .018);
+    stick(B(.38,.022,.04), drl, sd*.56, .585, .012);
+    const sp = new THREE.SpotLight(0xffffff, 0, 30, .42, .55, 1);
+    sp.position.set(sd*.55,.66,2.3); sp.target.position.set(sd*.35,0,13);
+    car.add(sp, sp.target); spots.push(sp);
+    const mir = new THREE.Mesh(B(.2,.11,.09), paint); mir.position.set(sd*.87,.93,.9); mir.castShadow = true; car.add(mir);
+  });
+  [1.38, -1.45].forEach(z => [-1,1].forEach(sd => {
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(.44,.44,.24,40), well); w.rotation.z = Math.PI/2; w.position.set(sd*.85,.36,z); car.add(w);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.26,36), tyre); t.rotation.z = Math.PI/2; t.position.set(sd*.87,.36,z); t.castShadow = true; car.add(t);
+    const r = new THREE.Mesh(new THREE.CylinderGeometry(.23,.23,.02,28), rim); r.rotation.z = Math.PI/2; r.position.set(sd*1.005,.36,z); car.add(r);
+  }));
+  return {car, lens, drl, spots};
+}
+
+/* ---------- awantech models (GLB, metres, Y up, length along X) ---------- */
+const MODELS = {
+  myvi_v2:           {n:'Myvi v2',            file:'models/myvi_v2.glb',           mb:9.8,  front:-1},
+  myvi:              {n:'Myvi',               file:'models/myvi.glb',              mb:1.7,  front:-1},
+  compact_hatchback: {n:'Compact hatchback',  file:'models/compact_hatchback.glb', mb:10.5, front:1},
+  sedan:             {n:'Sedan',              file:'models/sedan.glb',             mb:3.2,  front:1},
+  smart_fortwo:      {n:'Smart fortwo',       file:'models/smart_fortwo.glb',      mb:1.1,  front:-1},
+  cybertruck:        {n:'Cybertruck',         file:'models/cybertruck.glb',        mb:1.2,  front:-1},
+  angular_pickup:    {n:'Angular pickup',     file:'models/angular_pickup.glb',    mb:0.6,  front:-1},
+  concept:           {n:'Concept (built-in)'},
+};
+const modelCache = {};
+function prepareModel(root){
+  root.updateMatrixWorld(true);
+  // body paint = the opaque, non-glass, non-trim material covering the most surface (bare stainless bodies count as paintable)
+  const area = new Map(), a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const g = o.geometry, pos = g.attributes.position, idx = g.index, mats = Array.isArray(o.material) ? o.material : [o.material];
+    const groups = g.groups.length ? g.groups : [{start:0, count: idx ? idx.count : pos.count, materialIndex:0}];
+    const sx = new THREE.Vector3(); o.getWorldScale(sx); const k = Math.abs(sx.x*sx.y*sx.z) ** (2/3);
+    groups.forEach(gr => {
+      const m = mats[gr.materialIndex] || mats[0]; let sum = 0;
+      for (let i = gr.start; i < gr.start + gr.count; i += 3){
+        const i0 = idx ? idx.getX(i) : i, i1 = idx ? idx.getX(i+1) : i+1, i2 = idx ? idx.getX(i+2) : i+2;
+        a.fromBufferAttribute(pos,i0); b.fromBufferAttribute(pos,i1); c.fromBufferAttribute(pos,i2);
+        sum += b.sub(a).cross(c.sub(a)).length()/2;
+      }
+      area.set(m, (area.get(m) || 0) + sum*k);
+    });
+  });
+  let paint = null, best = 0;
+  area.forEach((v, m) => {
+    const lum = .2126*m.color.r + .7152*m.color.g + .0722*m.color.b;
+    if (m.transparent || m.opacity < .98 || /glass|rubber|tyre|tire|chrome|black|graphite|trim/i.test(m.name || '') || lum < .05) return;
+    if (v > best){ best = v; paint = m; }
+  });
+  // planar UVs in metres on painted meshes so flakes and orange peel have a scale
+  root.traverse(o => {
+    if (!o.isMesh || !paint) return;
+    if (!(Array.isArray(o.material) ? o.material.includes(paint) : o.material === paint)) return;
+    const g = o.geometry; if (!g.attributes.normal) g.computeVertexNormals();
+    const P = g.attributes.position, Nn = g.attributes.normal, uv = new Float32Array(P.count*2);
+    for (let i = 0; i < P.count; i++){
+      const nx = Math.abs(Nn.getX(i)), ny = Math.abs(Nn.getY(i)), nz = Math.abs(Nn.getZ(i));
+      const [u, v] = nx >= ny && nx >= nz ? [P.getZ(i), P.getY(i)] : ny >= nz ? [P.getX(i), P.getZ(i)] : [P.getX(i), P.getY(i)];
+      uv[i*2] = u; uv[i*2+1] = v;
+    }
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  });
+  const box = new THREE.Box3().setFromObject(root);
+  return {root, paint, box};
+}
+function loadModel(key, onProgress){
+  const M = MODELS[key];
+  // .glb loads directly; .b64.txt is the same model as base64 text (for hosts that only serve text)
+  if (!modelCache[key] && /\.glb$/i.test(M.file)) modelCache[key] = new Promise((res, rej) =>
+    new THREE.GLTFLoader().load(M.file, g => res(prepareModel(g.scene)), onProgress, rej));
+  if (!modelCache[key]) modelCache[key] = new Promise((res, rej) => {
+    const fl = new THREE.FileLoader(); fl.setResponseType('text');
+    fl.load(M.file, txt => {
+      const bin = atob(txt.replace(/\s+/g, '')), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      new THREE.GLTFLoader().parse(buf.buffer, '', g => res(prepareModel(g.scene)), rej);
+    }, onProgress, rej);
+  });
+  return modelCache[key];
+}
+
+function makeBench(key, init){
+  const el = document.getElementById('bay-' + key);
+  el.innerHTML = `
+    <div class="bay-head"><span class="tag">${key.toUpperCase()}</span><span class="summary"></span></div>
+    <div class="view"><span class="hint">drag to orbit · scroll to zoom</span></div>
+    <dl class="stats">
+      ${[['el','Sun height'],['az','Sun bearing'],['solar','Solar time'],['lux','Light at car'],['cct','Colour temp'],['am','Air mass'],['aod','Haze (AOD)'],['w','Water vapour']]
+        .map(([k,t]) => `<div class="stat"><dt>${t}</dt><dd data-s="${k}">–</dd></div>`).join('')}
+    </dl>
+    <div class="ctls"></div>`;
+  const c = {...init};
+  const tzList = [...Array.from({length:27},(_,i)=>i-12), -3.5, 3.5, 4.5, 5.5, 5.75, 6.5, 9.5, 10.5].sort((a,b)=>a-b);
+  const fmtTz = v => { const s = v < 0 ? '−' : '+', a = Math.abs(v); return `UTC${s}${String(Math.floor(a)).padStart(2,'0')}:${String(Math.round(a%1*60)).padStart(2,'0')}`; };
+  const fmtTime = v => `${String(Math.floor(v)).padStart(2,'0')}:${String(Math.round(v%1*60)).padStart(2,'0')}`;
+  const fmtDay = v => new Date(Date.UTC(2026,0,v)).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
+  const spec = [
+    {k:'region', t:'Region', sel:Object.entries(REGIONS).map(([k,r]) => [k,r.name])},
+    {k:'tz', t:'Timezone', sel:tzList.map(v => [v, fmtTz(v)])},
+    {k:'day', t:'Date', min:1, max:365, step:1, f:fmtDay},
+    {k:'time', t:'Clock time', min:0, max:23.75, step:.25, f:fmtTime},
+    {k:'weather', t:'Sky', sel:Object.entries(WEATHER).map(([k,w]) => [k,w.n])},
+    {k:'temp', t:'Air temperature', min:-30, max:50, step:1, f:v => `${v} °C`},
+    {k:'hum', t:'Humidity', min:5, max:100, step:1, f:v => `${v} %`},
+    {k:'aod', t:'Aerosol / pollution', min:.02, max:1.5, step:.01, f:v => (+v).toFixed(2)},
+    {k:'alt', t:'Altitude', min:0, max:4500, step:10, f:v => `${v} m`},
+    {k:'o3', t:'Ozone column', min:200, max:450, step:5, f:v => `${v} DU`},
+    {k:'heading', t:'Car faces', min:0, max:355, step:5, f:v => `${v}° ${['N','NE','E','SE','S','SW','W','NW'][Math.round(v/45)%8]}`},
+    {k:'street', t:'Street light', sel:Object.entries(STREET).map(([k,s]) => [k,s.n])},
+    {k:'head', t:'Headlights', sel:Object.entries(HEAD).map(([k,h]) => [k,h.n])},
+  ];
+  const ctls = el.querySelector('.ctls');
+  ctls.innerHTML = spec.map(s => {
+    const id = `${key}-${s.k}`;
+    return s.sel
+      ? `<div class="ctl"><label for="${id}">${s.t}</label><output></output><select id="${id}">${s.sel.map(([v,n]) => `<option value="${v}">${n}</option>`).join('')}</select></div>`
+      : `<div class="ctl"><label for="${id}">${s.t}</label><output id="${id}-o"></output><input type="range" id="${id}" min="${s.min}" max="${s.max}" step="${s.step}"></div>`;
+  }).join('');
+
+  const B = {key, c, el, spec};
+  B.syncUI = () => spec.forEach(s => {
+    const inp = document.getElementById(`${key}-${s.k}`); inp.value = c[s.k];
+    if (!s.sel) document.getElementById(`${key}-${s.k}-o`).textContent = s.f(c[s.k]);
+  });
+  spec.forEach(s => {
+    const inp = document.getElementById(`${key}-${s.k}`);
+    inp.addEventListener('input', () => {
+      c[s.k] = (s.sel && s.k !== 'tz') ? inp.value : +inp.value;
+      if (s.k === 'region'){ const R = REGIONS[c.region]; Object.assign(c, {tz:R.tz, alt:R.alt, aod:R.aod, temp:R.temp, hum:R.hum, o3:R.o3}); }
+      B.syncUI(); B.update();
+    });
+  });
+
+  // renderer
+  const view = el.querySelector('.view');
+  const renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  view.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1.6, .1, 1500);
+  camera.position.set(3.4, 1.45, 7.4);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, .75, .3); controls.minDistance = 3.5; controls.maxDistance = 20; controls.maxPolarAngle = 1.53;
+  controls.update();
+
+  const skyGeo = new THREE.SphereGeometry(600, 48, 24);
+  const sky = new THREE.Mesh(skyGeo, skyMat(true)); scene.add(sky);
+  const envScene = new THREE.Scene(); const envSky = new THREE.Mesh(skyGeo, skyMat(false)); envScene.add(envSky);
+  const pmrem = new THREE.PMREMGenerator(renderer); pmrem.compileCubemapShader();
+  let envRT = null;
+
+  const paint = makePaint();
+  const {car, lens, drl, spots} = buildCar(paint);
+  const holder = new THREE.Group(); holder.add(car); scene.add(holder);
+  let imported = null;
+
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(400, 72), new THREE.MeshStandardMaterial({color:linColor('#303134'), roughness:.92}));
+  ground.rotation.x = -Math.PI/2; ground.receiveShadow = true; scene.add(ground);
+  const lineMat = new THREE.MeshStandardMaterial({color:linColor('#d9d8d0'), roughness:.8});
+  [-1.55, 1.55].forEach(x => { const m = new THREE.Mesh(new THREE.PlaneGeometry(.12, 5.4), lineMat); m.rotation.x = -Math.PI/2; m.position.set(x,.004,-.2); m.receiveShadow = true; scene.add(m); });
+  // lookdev reference balls: 18% grey + chrome
+  const grey = new THREE.Mesh(new THREE.SphereGeometry(.2,32,16), new THREE.MeshStandardMaterial({color:new THREE.Color(.18,.18,.18), roughness:.95}));
+  grey.position.set(1.95,.2,3.05); grey.castShadow = true; scene.add(grey);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.2,32,16), new THREE.MeshStandardMaterial({color:0xffffff, metalness:1, roughness:.03}));
+  ball.position.set(2.5,.2,2.75); ball.castShadow = true; scene.add(ball);
+
+  const sun = new THREE.DirectionalLight(0xffffff, 1);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, {left:-6, right:6, top:6, bottom:-6, near:1, far:80});
+  sun.shadow.bias = -.0004; sun.shadow.normalBias = .02;
+  scene.add(sun, sun.target);
+
+  const lamp = new THREE.Group();
+  const poleMat = new THREE.MeshStandardMaterial({color:linColor('#5a5d62'), metalness:.6, roughness:.5});
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.06,.08,6,16), poleMat); pole.position.set(2.6,3,-.6); pole.castShadow = true;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(2.2,.06,.06), poleMat); arm.position.set(1.55,5.95,-.6);
+  const headMat = new THREE.MeshStandardMaterial({color:0x111111, emissive:0xffffff, emissiveIntensity:0});
+  const head = new THREE.Mesh(new THREE.BoxGeometry(.55,.08,.26), headMat); head.position.set(.5,5.9,-.6);
+  const streetL = new THREE.PointLight(0xffffff, 0, 30, 1); streetL.position.set(.5,5.7,-.6);
+  lamp.add(pole, arm, head, streetL); scene.add(lamp);
+
+  const vec = a => new THREE.Vector3(a[0], a[1], a[2]);
+  B.dirty = true;
+  B.renderer = renderer; B.scene = scene; B.sun = sun; B.camera = camera; B.controls = controls; B.paint = paint; B.ground = ground;
+
+  B.update = () => {
+    const r = B.res = solve(c);
+    const {az, el: e} = r.sp;
+    const sd = new THREE.Vector3(Math.sin(az*rad)*Math.cos(e*rad), Math.sin(e*rad), -Math.cos(az*rad)*Math.cos(e*rad));
+    holder.rotation.y = -(c.heading - 180)*rad; // 180° = facing south (+Z)
+    sun.position.copy(sd).multiplyScalar(40); sun.color.setRGB(...r.sunCol); sun.intensity = e > -1 ? r.sunI : 0;
+    const strength = WEATHER[c.weather].c;
+    sun.castShadow = strength < 1 && e > 0;
+
+    [sky.material, envSky.material].forEach(m => {
+      const u = m.uniforms;
+      u.zen.value.copy(vec(r.zen)); u.hor.value.copy(vec(r.hor)); u.gnd.value.copy(vec(r.gnd));
+      u.glow.value.copy(vec(r.glow)); u.sunDir.value.copy(sd);
+      u.haze.value = 1 - Math.exp(-(WEATHER[c.weather].fog ?? Math.max(.0065, r.s.aod*.006))*350);
+      u.disc.value.copy(m === sky.material ? vec(r.disc) : new THREE.Vector3());
+    });
+    if (envRT) envRT.dispose();
+    envRT = pmrem.fromScene(envScene, 0, .1, 1000);
+    scene.environment = envRT.texture;
+
+    const W = WEATHER[c.weather];
+    const fogD = W.fog ?? Math.max(.0065, r.s.aod*.006);
+    scene.fog = new THREE.FogExp2(new THREE.Color(...r.hor), fogD);
+    ground.material.roughness = W.wet ? .14 : .92;
+    ground.material.color.copy(linColor(W.wet ? '#1f2023' : '#303134'));
+
+    lamp.visible = c.street !== 'none';
+    streetL.color.setRGB(...r.streetCol); streetL.intensity = r.streetI/.8;
+    headMat.emissive.setRGB(...r.streetCol); headMat.emissiveIntensity = r.streetI*600;
+
+    const H = HEAD[c.head];
+    const hc = H.spec ? lightColor(H.spec) : [1,1,1];
+    const hm = Math.max(...hc);
+    lens.emissive.setRGB(...hc.map(v => v/hm)); lens.emissiveIntensity = H.spec ? 1.6 : 0;
+    drl.emissive.setRGB(...hc.map(v => v/hm)); drl.emissiveIntensity = H.spec ? 1.2 : .05;
+    spots.forEach(s => { s.color.setRGB(...hc); s.intensity = H.spec ? 3*250/110000*6 : 0; });
+
+    const expo = document.getElementById('expo').value === 'adapt' ? clamp(.85/Math.pow(Math.max(r.rel,1e-9), .75), .4, 4000) : .85;
+    renderer.toneMappingExposure = expo; sky.material.uniforms.exposure.value = expo;
+
+    // readouts
+    const st = k => el.querySelector(`[data-s="${k}"]`);
+    st('el').textContent = `${e.toFixed(1)}°`;
+    st('az').textContent = `${Math.round(az)}°`;
+    st('solar').textContent = fmtTime(Math.round(r.sp.solar*60)/60 % 24);
+    st('lux').textContent = r.lux >= 1000 ? `${(r.lux/1000).toFixed(r.lux < 1e4 ? 1 : 0)}k lx` : r.lux >= 1 ? `${r.lux.toFixed(0)} lx` : `${r.lux.toFixed(3)} lx`;
+    st('cct').textContent = r.cct > 1500 && r.cct < 25000 ? `${Math.round(r.cct/50)*50} K` : '—';
+    st('am').textContent = Number.isFinite(r.s.m) ? r.s.m.toFixed(1) : 'below hz';
+    st('aod').textContent = r.s.aod.toFixed(2);
+    st('w').textContent = `${r.s.w.toFixed(1)} cm`;
+    const phase = e > 6 ? 'day' : e > 0 ? 'golden hour' : e > -6 ? 'civil twilight' : e > -12 ? 'nautical twilight' : 'night';
+    el.querySelector('.summary').textContent = `${REGIONS[c.region].name} · ${fmtDay(c.day)} ${fmtTime(c.time)} ${fmtTz(c.tz)} · ${WEATHER[c.weather].n} · ${phase}`;
+    B.dirty = true;
+    scheduleCompare();
+  };
+
+  new ResizeObserver(() => {
+    const w = view.clientWidth, h = view.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix(); B.dirty = true;
+  }).observe(view);
+  controls.addEventListener('change', () => { B.dirty = true; B.onCamera && B.onCamera(); });
+  B.render = () => { if (B.dirty){ renderer.render(scene, camera); B.dirty = false; } };
+  B.setModel = (prep, front) => {
+    if (imported){ holder.remove(imported); imported = null; }
+    car.children.forEach(o => { if (!o.isLight && !(o.isObject3D && spots.some(s => s.target === o))) o.visible = !prep; });
+    let half = 2.35;
+    if (prep){
+      const inner = prep.root.clone(true);
+      inner.traverse(o => { if (!o.isMesh) return; o.castShadow = o.receiveShadow = true;
+        if (Array.isArray(o.material)) o.material = o.material.map(m => m === prep.paint ? paint : m);
+        else if (o.material === prep.paint) o.material = paint; });
+      const ctr = prep.box.getCenter(new THREE.Vector3());
+      inner.position.set(-ctr.x, -prep.box.min.y, -ctr.z);
+      imported = new THREE.Group(); imported.add(inner); imported.rotation.y = front > 0 ? -Math.PI/2 : Math.PI/2;
+      holder.add(imported);
+      half = (prep.box.max.x - prep.box.min.x)/2;
+    }
+    spots.forEach((s, i) => { s.position.z = half - .05; s.target.position.z = half + 11; });
+    grey.position.z = half + .75; ball.position.z = half + .45;
+    B.dirty = true;
+  };
+  B.syncUI();
+  return B;
+}
+
+/* ---------- app ---------- */
+const DEF_A = {region:'kl', ...pick(REGIONS.kl), day:276, time:13, weather:'clear', heading:165, street:'none', head:'off'};
+const DEF_B = {region:'rey', ...pick(REGIONS.rey), day:276, time:18.5, weather:'clear', heading:165, street:'none', head:'off'};
+function pick(R){ return {tz:R.tz, alt:R.alt, aod:R.aod, temp:R.temp, hum:R.hum, o3:R.o3}; }
+
+let paintHex = PAINTS[0][1], finish = PAINTS[0][2];
+
+let compareQueued = false;
+function scheduleCompare(){ if (!compareQueued){ compareQueued = true; requestAnimationFrame(() => { compareQueued = false; compare(); }); } }
+
+const A = makeBench('a', DEF_A), Bb = makeBench('b', DEF_B);
+const benches = [A, Bb];
+
+function applyPaint(){
+  const F = FIN[finish], look = paintLook(paintHex, finish);
+  PAINT_U.faceCol.value.copy(look.face); PAINT_U.flopCol.value.copy(look.flop); PAINT_U.flopExp.value = F.exp;
+  document.getElementById('finish').value = finish;
+  benches.forEach(b => {
+    Object.assign(b.paint, {metalness:F.metalness, roughness:F.roughness, clearcoat:F.clearcoat, clearcoatRoughness:F.clearcoatRoughness});
+    b.paint.normalScale.set(F.flake, F.flake); b.paint.clearcoatNormalScale.set(F.peel, F.peel); b.dirty = true;
+  });
+  document.querySelectorAll('.chip').forEach(ch => ch.setAttribute('aria-pressed', ch.dataset.hex === paintHex && ch.dataset.type === finish));
+  scheduleCompare();
+}
+// chip preview: face colour on the lit side, flop colour toward the shaded edge
+function chipBg(hex, type){ const {face, flop} = paintLook(hex, type); const f = face.clone().convertLinearToSRGB().getStyle(), d = flop.clone().convertLinearToSRGB().getStyle();
+  return `linear-gradient(160deg, ${f} 0%, ${f} 35%, ${d} 100%)`; }
+const chips = document.getElementById('chips');
+chips.innerHTML = PAINTS.map(([n,h,t]) => `<button class="chip" data-hex="${h}" data-type="${t}" aria-pressed="false"><i style="background:${chipBg(h,t)}"></i><span>${n}<br><em>${FIN[t].n}</em></span></button>`).join('')
+  + `<label class="custom"><input type="color" id="customPaint" value="#3a7bd5"><span>Custom</span></label>`;
+chips.addEventListener('click', e => { const ch = e.target.closest('.chip'); if (ch){ paintHex = ch.dataset.hex; finish = ch.dataset.type; applyPaint(); } });
+document.getElementById('customPaint').addEventListener('input', e => { paintHex = e.target.value; applyPaint(); });
+document.getElementById('finish').addEventListener('change', e => { finish = e.target.value; applyPaint(); });
+document.getElementById('expo').addEventListener('change', () => benches.forEach(b => b.update()));
+
+// camera link
+let syncing = false;
+const link = (from, to) => from.onCamera = () => {
+  if (syncing || !document.getElementById('sync').checked) return;
+  syncing = true; to.camera.position.copy(from.camera.position); to.controls.target.copy(from.controls.target); to.controls.update(); to.dirty = true; syncing = false;
+};
+link(A, Bb); link(Bb, A);
+
+const copy = (from, to) => { Object.assign(to.c, from.c); to.syncUI(); to.update(); };
+document.getElementById('copyAB').onclick = () => copy(A, Bb);
+document.getElementById('copyBA').onclick = () => copy(Bb, A);
+
+let playing = false;
+const playBtn = document.getElementById('play');
+playBtn.onclick = () => { playing = !playing; playBtn.setAttribute('aria-pressed', playing); playBtn.textContent = playing ? 'Stop the clock' : 'Run the clock'; };
+
+/* ---------- comparison panel ---------- */
+const chart = document.getElementById('chart');
+const visStrip = (() => { const out = []; for (let l = 380; l <= 780; l += 2){ const rgb = xyz2rgb(cmfAt(l)).map(v => Math.max(v,0)); const m = Math.max(...rgb, 1e-6); const y = cmfAt(l)[1]; out.push([l, linToHex(rgb.map(v => v/m*clamp(y*2.2+.08,0,1)))]); } return out; })();
+function drawChart(){
+  const dpr = Math.min(devicePixelRatio, 2), W = chart.clientWidth, H = chart.clientHeight;
+  if (!W) return;
+  chart.width = W*dpr; chart.height = H*dpr;
+  const g = chart.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const css = getComputedStyle(document.documentElement);
+  const pad = {l:36, r:10, t:14, b:40};
+  const x = l => pad.l + (l-380)/400*(W-pad.l-pad.r), y = v => pad.t + (1-v)*(H-pad.t-pad.b);
+  g.strokeStyle = css.getPropertyValue('--line'); g.fillStyle = css.getPropertyValue('--muted'); g.font = '11px "IBM Plex Mono", monospace'; g.lineWidth = 1;
+  for (let v = 0; v <= 1.001; v += .25){ g.beginPath(); g.moveTo(pad.l, y(v)+.5); g.lineTo(W-pad.r, y(v)+.5); g.stroke(); g.textAlign = 'right'; g.fillText(v.toFixed(2), pad.l-6, y(v)+4); }
+  g.textAlign = 'center';
+  for (let l = 400; l <= 750; l += 50) g.fillText(l, x(l), H-6);
+  const sh = H-pad.b+6; visStrip.forEach(([l,c]) => { g.fillStyle = c; g.fillRect(x(l), sh, x(l+2)-x(l)+.6, 10); });
+  [[A,'--a'],[Bb,'--b']].forEach(([b,tok]) => {
+    if (!b.res) return;
+    const t = b.res.total, m = Math.max(...t, 1e-30), col = css.getPropertyValue(tok).trim();
+    g.beginPath(); WL.forEach((l,i) => i ? g.lineTo(x(l), y(t[i]/m)) : g.moveTo(x(l), y(t[i]/m)));
+    g.strokeStyle = col; g.lineWidth = 2.2; g.stroke();
+    g.lineTo(x(780), y(0)); g.lineTo(x(380), y(0)); g.closePath(); g.globalAlpha = .12; g.fillStyle = col; g.fill(); g.globalAlpha = 1;
+  });
+  g.fillStyle = css.getPropertyValue('--muted'); g.textAlign = 'right'; g.fillText('nm', W-pad.r, H-pad.b+2-6);
+}
+function compare(){
+  const paint = hexToLin(paintHex);
+  const seen = {};
+  [[A,'A'],[Bb,'B']].forEach(([b,k]) => {
+    if (!b.res) return;
+    const lc = b.res.totalCol, m = Math.max(...lc);
+    const lightHex = linToHex(lc.map(v => v/m));
+    const p = paint.map((v,i) => v*lc[i]);
+    const pHex = linToHex(p);
+    seen[k] = p;
+    const L = document.getElementById('light'+k), P = document.getElementById('paint'+k);
+    L.style.background = lightHex; L.firstElementChild.textContent = b.res.cct > 1500 && b.res.cct < 25000 ? `${Math.round(b.res.cct/50)*50} K` : lightHex;
+    P.style.background = pHex; P.firstElementChild.textContent = pHex;
+  });
+  if (seen.A && seen.B){
+    const a = lab(seen.A), c = lab(seen.B), d = Math.hypot(a[0]-c[0], a[1]-c[1], a[2]-c[2]);
+    document.getElementById('delta').firstChild.textContent = d.toFixed(1);
+    document.getElementById('deltaNote').textContent = d < 2 ? 'Barely noticeable side by side.' : d < 6 ? 'Visible when the two are next to each other.' : d < 15 ? 'Clearly different shade.' : 'Reads as a different colour.';
+  }
+  drawChart();
+}
+new ResizeObserver(drawChart).observe(chart);
+
+const modelSel = document.getElementById('model'), loadState = document.getElementById('loadState');
+modelSel.innerHTML = Object.entries(MODELS).map(([k, m]) => `<option value="${k}">${m.n}${m.mb ? ` · ${m.mb} MB` : ''}</option>`).join('');
+let modelReq = 0;
+function setModel(key){
+  const req = ++modelReq, M = MODELS[key];
+  if (!M.file){ benches.forEach(b => b.setModel(null)); loadState.textContent = ''; return; }
+  loadState.textContent = `Loading ${M.n}…`;
+  loadModel(key, e => { if (req === modelReq && e.total) loadState.textContent = `Loading ${M.n}… ${(e.loaded/1e6).toFixed(1)} / ${(e.total/1e6).toFixed(1)} MB`; })
+    .then(prep => { if (req !== modelReq) return; benches.forEach(b => b.setModel(prep, M.front));
+      loadState.textContent = prep.paint ? '' : 'No body panel found to repaint'; })
+    .catch(() => { if (req === modelReq){ delete modelCache[key]; loadState.textContent = `Could not load ${M.n}. Pick it again to retry.`; } });
+}
+modelSel.addEventListener('change', () => setModel(modelSel.value));
+
+applyPaint();
+benches.forEach(b => b.update());
+setModel(modelSel.value);
+
+let lastT = 0;
+function loop(t){
+  if (playing && t - lastT > 40){
+    lastT = t;
+    benches.forEach(b => { b.c.time = (b.c.time + .1) % 24; b.syncUI(); b.update(); });
+  }
+  benches.forEach(b => b.render());
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>
