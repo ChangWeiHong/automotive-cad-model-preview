@@ -18,6 +18,8 @@ name="$(printf '%s' "$name" | tr ' ' '_' | tr -cd 'A-Za-z0-9._-')"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$root/models/STEP/$name.step"
 cp "$src" "$dest"
+# keep the materials/appearance sidecar if the STEP has one (bound by content hash)
+[ -f "$src.json" ] && cp "$src.json" "$dest.json" && echo "  + sidecar $name.step.json"
 
 app="$(sed -n 's/^app = "\(.*\)"/\1/p' "$root/apps/viewer/fly.toml")"
 base="https://$app.fly.dev"

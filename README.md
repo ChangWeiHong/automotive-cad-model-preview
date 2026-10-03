@@ -14,6 +14,10 @@ local viewer, e.g. `http://127.0.0.1:3256/?file=STEP%2Fmyvi_v2.step`.
 <!-- models:start -->
 | `myvi_v2` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fmyvi_v2.step |
 | `myvi` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fmyvi.step |
+| `cybertruck` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fcybertruck.step |
+| `sedan` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fsedan.step |
+| `sport_wheel` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fsport_wheel.step |
+| `wheel` | https://awantech-cad-viewer.fly.dev/?file=STEP%2Fwheel.step |
 <!-- models:end -->
 
 `scripts/add-step.sh` adds a row here automatically.
